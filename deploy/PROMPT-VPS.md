@@ -1,7 +1,44 @@
 # Prompt para a sessão do Claude Code na VPS
 
-Copie o bloco abaixo e cole como primeira mensagem numa sessão do Claude Code
-aberta dentro do diretório do projeto (`claude` rodando em `~/detran-agendamento`).
+## Antes: instalar o Claude Code na VPS
+
+Documentação oficial de instalação:
+**<https://code.claude.com/docs/en/setup>**
+(primeiros passos: <https://code.claude.com/docs/en/quickstart>)
+
+Instalador nativo (recomendado — macOS, Linux, WSL):
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+Ou, se preferir via npm (requer Node.js 22+):
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+Confira e faça login:
+
+```bash
+claude --version      # deve imprimir a versão, ex.: 2.1.211 (Claude Code)
+cd ~/detran-agendamento
+claude                # na primeira vez, ele pede para autenticar
+```
+
+Dois detalhes práticos numa VPS:
+
+- **Requer conta Pro, Max, Team, Enterprise ou Console.** O plano gratuito do
+  Claude.ai não inclui o Claude Code.
+- **A VPS não tem navegador.** O login imprime uma URL no terminal — copie e
+  abra no navegador do seu computador, faça login e cole o código de volta.
+
+Requisitos do sistema: Ubuntu 20.04+ / Debian 10+, 4 GB+ de RAM.
+
+## O prompt
+
+Copie o bloco abaixo e cole como primeira mensagem da sessão, com o `claude`
+aberto dentro de `~/detran-agendamento`.
 
 Ele é auto-contido: a sessão nova não tem memória desta conversa, então o prompt
 diz o objetivo, a ordem de trabalho e os cuidados.
@@ -66,6 +103,10 @@ Cuidados que eu quero que você respeite:
 Ao terminar, me explique o que estava errado e o que você mudou, e me diga como
 deixar rodando 24/7 (há um deploy/instalar-vps.sh que configura um timer do
 systemd a cada 2 horas).
+
+Se faltar alguma dependência de ambiente (Node 22+, Chromium do Playwright,
+xvfb), instale. O deploy/instalar-vps.sh já faz isso e serve de referência.
+Documentação do Claude Code, se precisar: https://code.claude.com/docs/en/setup
 ```
 
 ---
