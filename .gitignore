@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+# Sessão do navegador (contém os cookies de login — NUNCA versionar)
+.session/
+user-data/
+# Artefatos de execução
+runs/
+*.log
+screenshots/

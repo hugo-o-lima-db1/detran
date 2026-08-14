@@ -1,0 +1,63 @@
+name: Verificar vagas DETRAN-PR
+
+# Roda periodicamente e também sob demanda (aba Actions -> Run workflow).
+on:
+  schedule:
+    # A cada 6 horas (UTC). O GitHub pode atrasar alguns minutos.
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+# Evita execuções simultâneas.
+concurrency:
+  group: detran-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Instalar Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+
+      # A sessão logada (pasta user-data) é restaurada a partir de um cache/artefato.
+      # IMPORTANTE: leia o README — o GitHub Actions NÃO consegue passar pelo
+      # login com 2FA sozinho. Este job serve para MONITORAR e AVISAR; o
+      # agendamento automático é mais confiável rodando na sua própria máquina.
+      - name: Restaurar sessão do navegador (se existir)
+        uses: actions/cache@v4
+        with:
+          path: user-data
+          key: detran-session-v1
+
+      - name: Verificar vagas
+        env:
+          DETRAN_CPF: ${{ secrets.DETRAN_CPF }}
+          DETRAN_SERVICO: '749'
+          AUTO_BOOK: ${{ vars.AUTO_BOOK || 'false' }}
+          HEADLESS: 'true'
+          CIDADE_PREFERIDA: ${{ vars.CIDADE_PREFERIDA }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        # exit 1 (sem vaga) não deve marcar o workflow como falho.
+        run: npm run check || [ $? -eq 1 ]
+
+      - name: Guardar evidências (screenshots/logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runs
+          path: runs/
+          retention-days: 7
+          if-no-files-found: ignore

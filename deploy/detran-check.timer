@@ -1,0 +1,12 @@
+[Unit]
+Description=Dispara a verificacao de vagas do DETRAN-PR periodicamente
+
+[Timer]
+# Roda 4x ao dia (00h, 06h, 12h, 18h). Ajuste como quiser.
+OnCalendar=*-*-* 00,06,12,18:00:00
+# Se a maquina estava desligada na hora, roda assim que ligar.
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

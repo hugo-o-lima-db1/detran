@@ -1,0 +1,13 @@
+[Unit]
+Description=Verificacao de vagas do exame psicologico no DETRAN-PR
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Ajuste o caminho do projeto e o usuario.
+WorkingDirectory=%h/detran
+# Use o Node/npm do seu sistema. Ex.: /usr/bin/npm
+ExecStart=/usr/bin/npm run check
+# Nao expor a senha em logs.
+Environment=NODE_ENV=production

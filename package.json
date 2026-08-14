@@ -1,0 +1,26 @@
+{
+  "name": "detran-agendamento-psicologico",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automação que monitora diariamente as vagas de agendamento do exame psicológico no DETRAN-PR (serviço 749) e agenda automaticamente a primeira data disponível.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "login": "tsx src/cli.ts login",
+    "check": "tsx src/cli.ts check",
+    "loop": "tsx src/cli.ts loop",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
