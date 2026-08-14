@@ -1,39 +1,49 @@
 # Prompt para a sessão do Claude Code na VPS
 
-## Antes: instalar o Claude Code na VPS
+## Antes: pegar o repositório na VPS
 
-Documentação oficial de instalação:
-**<https://code.claude.com/docs/en/setup>**
-(primeiros passos: <https://code.claude.com/docs/en/quickstart>)
-
-Instalador nativo (recomendado — macOS, Linux, WSL):
+Repositório: **<https://github.com/hugo-o-lima-db1/detran>**
+Branch: `claude/automate-psychology-exam-booking-wwkv2k`
+Instalador: `deploy/instalar-vps.sh`
 
 ```bash
-curl -fsSL https://claude.ai/install.sh | bash
-```
-
-Ou, se preferir via npm (requer Node.js 22+):
-
-```bash
-npm install -g @anthropic-ai/claude-code
-```
-
-Confira e faça login:
-
-```bash
-claude --version      # deve imprimir a versão, ex.: 2.1.211 (Claude Code)
+git clone -b claude/automate-psychology-exam-booking-wwkv2k \
+  https://github.com/hugo-o-lima-db1/detran.git ~/detran-agendamento
 cd ~/detran-agendamento
-claude                # na primeira vez, ele pede para autenticar
+bash deploy/instalar-vps.sh
 ```
 
-Dois detalhes práticos numa VPS:
+### ⚠️ O repositório é privado
 
-- **Requer conta Pro, Max, Team, Enterprise ou Console.** O plano gratuito do
-  Claude.ai não inclui o Claude Code.
-- **A VPS não tem navegador.** O login imprime uma URL no terminal — copie e
-  abra no navegador do seu computador, faça login e cole o código de volta.
+O `git clone` acima vai pedir autenticação. Escolha uma opção:
 
-Requisitos do sistema: Ubuntu 20.04+ / Debian 10+, 4 GB+ de RAM.
+**Opção A — token de acesso pessoal (mais rápido).** Gere um em
+<https://github.com/settings/personal-access-tokens> (Fine-grained token, acesso
+*Contents: Read* ao repositório `detran`) e use:
+
+```bash
+git clone -b claude/automate-psychology-exam-booking-wwkv2k \
+  https://SEU_TOKEN@github.com/hugo-o-lima-db1/detran.git ~/detran-agendamento
+```
+
+**Opção B — chave SSH.** Se a VPS já tem uma chave cadastrada no seu GitHub:
+
+```bash
+git clone -b claude/automate-psychology-exam-booking-wwkv2k \
+  git@github.com:hugo-o-lima-db1/detran.git ~/detran-agendamento
+```
+
+**Opção C — copiar da sua máquina**, sem envolver o GitHub:
+
+```bash
+# rodando na SUA máquina, dentro da pasta do projeto:
+rsync -av --exclude node_modules --exclude .env --exclude runs \
+  --exclude user-data ./ usuario@IP_DA_VPS:~/detran-agendamento/
+```
+
+> Cuidado: se usar a Opção A, o token fica gravado em
+> `.git/config` da VPS. Para removê-lo depois de clonar:
+> `git -C ~/detran-agendamento remote set-url origin https://github.com/hugo-o-lima-db1/detran.git`
 
 ## O prompt
 
@@ -105,8 +115,16 @@ deixar rodando 24/7 (há um deploy/instalar-vps.sh que configura um timer do
 systemd a cada 2 horas).
 
 Se faltar alguma dependência de ambiente (Node 22+, Chromium do Playwright,
-xvfb), instale. O deploy/instalar-vps.sh já faz isso e serve de referência.
-Documentação do Claude Code, se precisar: https://code.claude.com/docs/en/setup
+xvfb), instale. Este projeto tem um instalador pronto que faz tudo isso e
+configura o agendamento:
+
+  repositório: https://github.com/hugo-o-lima-db1/detran
+  branch:      claude/automate-psychology-exam-booking-wwkv2k
+  instalador:  bash deploy/instalar-vps.sh
+
+Se o projeto ainda não estiver completo nesta máquina, use esse repositório como
+fonte. O instalador também testa, antes de instalar qualquer coisa, se esta
+máquina alcança o servidor de aplicação do Detran.
 ```
 
 ---
