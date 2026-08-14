@@ -59,6 +59,8 @@ async function cmdCheck(cfg: Config): Promise<void> {
 }
 
 async function cmdLoop(cfg: Config): Promise<void> {
+  // Falha rápido em erro de configuração (senão o loop repetiria o erro).
+  assertRunnable(cfg);
   // Intervalo entre verificações (minutos). Padrão: a cada 6 horas.
   const minutes = Number(process.env.LOOP_INTERVAL_MIN ?? '360');
   const intervalMs = (Number.isFinite(minutes) && minutes >= 1 ? minutes : 360) * 60_000;

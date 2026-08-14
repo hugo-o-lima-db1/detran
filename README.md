@@ -1,212 +1,185 @@
 # Agendamento automático do exame psicológico — DETRAN-PR
 
-Automação que **verifica todo dia se há datas disponíveis** para o exame
-psicológico (avaliação psicológica, serviço **749**) no portal do DETRAN-PR e,
-assim que encontra uma vaga, **agenda automaticamente** a primeira data — ou só
-te avisa, se você preferir.
+Automação que **verifica de tempos em tempos se há datas disponíveis** para o
+exame psicológico (avaliação psicológica, serviço **749**) no portal do
+DETRAN-PR e, assim que encontra uma vaga, **agenda automaticamente** a data mais
+próxima — ou só te avisa, se você preferir.
+
+O acesso ao agendamento é feito **apenas com CPF + número do processo** (sem
+senha e sem código no celular), então a automação roda **sozinha, 24/7**, sem
+precisar da sua máquina ligada.
 
 Portal oficial:
 <https://www.detran.pr.gov.br/servicos/Motorista/Exames-e-provas/Agendar-ou-cancelar-exames-lqNJnNx8>
-→ agendamento em
-<https://www.agendamento.detran.pr.gov.br/detran-agendamento/portal?servico=749>
 
 ---
 
-## ⚠️ Leia isto primeiro (importante)
+## 🚀 Rodar 24/7 no GitHub Actions (recomendado)
 
-O agendamento do DETRAN-PR **exige login** na *Central de Segurança do Paraná*
-(o mesmo login do `gov.br` / identidade digital), muitas vezes **com segundo
-fator (2FA)**. Não existe forma de agendar sem essa autenticação.
+Esta é a forma mais simples: roda de graça na infraestrutura do GitHub, no
+horário agendado, **sem servidor para manter**.
 
-Por isso a automação funciona assim:
+### Passo 1 — Tenha o código no seu GitHub
 
-1. **Você faz login UMA vez**, numa janela de navegador que abre na sua tela
-   (comando `npm run login`). A sessão fica salva na pasta `user-data/`.
-2. Depois disso, a verificação diária roda **sozinha e sem janela** (headless),
-   reaproveitando essa sessão salva.
-3. Quando a sessão expirar (o DETRAN desloga de tempos em tempos), a automação
-   te **avisa** para refazer o login.
+O código já está no repositório. Se ainda não estiver na branch principal, faça
+o merge (ou use a branch atual). O workflow fica em
+`.github/workflows/check.yml`.
 
-> **Onde rodar:** o mais confiável é na **sua própria máquina** (que já está
-> logada) ou num servidor/VPS seu. O GitHub Actions incluído serve para
-> *monitorar e avisar*, mas não passa sozinho pelo 2FA.
+### Passo 2 — Configure os segredos e variáveis
 
----
+No GitHub, vá em **Settings → Secrets and variables → Actions**.
 
-## Instalação
+Em **Secrets** (dados sensíveis), clique em *New repository secret* e crie:
 
-Requer **Node.js 20+**.
-
-```bash
-cd detran
-npm install
-npx playwright install chromium   # baixa o navegador (só na primeira vez)
-cp .env.example .env               # depois edite o .env
-```
-
-Edite o `.env` e preencha pelo menos:
-
-- `DETRAN_CPF` — seu CPF.
-- `AUTO_BOOK` — `true` para agendar sozinho, `false` para só avisar.
-- Um canal de notificação (Telegram é o mais simples — veja abaixo).
-
----
-
-## Uso
-
-### 1) Login (uma vez, com janela visível)
-
-```bash
-npm run login
-```
-
-Abre o portal numa janela. **Faça o login normalmente** (CPF, senha, 2FA). Quando
-a automação detectar que você está autenticado, ela salva a sessão e fecha. Se
-demorar, ela espera até 5 minutos.
-
-> Dica: no Linux sem tela (servidor), use `xvfb-run npm run login` ou faça o
-> login numa máquina com tela e copie a pasta `user-data/` para o servidor.
-
-### 2) Verificação avulsa
-
-```bash
-npm run check
-```
-
-Faz uma verificação única. Resultados possíveis:
-
-| Status | Significado |
+| Secret | Valor |
 |---|---|
-| `BOOKED` | Agendou com sucesso 🎉 |
-| `AVAILABLE` | Achou vaga (mas `AUTO_BOOK=false`, então só avisou) |
-| `NO_AVAILABILITY` | Sem datas no momento (não notifica, pra não encher) |
-| `NEEDS_LOGIN` | Sessão expirou — rode `npm run login` de novo |
-| `STUCK` | Travou numa etapa específica do seu processo (veja abaixo) |
+| `DETRAN_CPF` | Seu CPF (só números) |
+| `DETRAN_PROCESSO` | Seu número de processo / RENACH |
+| `TELEGRAM_BOT_TOKEN` | (opcional) token do bot do Telegram |
+| `TELEGRAM_CHAT_ID` | (opcional) seu chat id no Telegram |
+| `WEBHOOK_URL` | (opcional) URL de webhook Slack/Discord |
 
-Screenshots e logs de cada execução ficam em `runs/`.
+Em **Variables** (não sensíveis), opcionalmente:
 
-### 3) Loop contínuo (verifica de tempos em tempos)
+| Variable | Padrão | Para quê |
+|---|---|---|
+| `AUTO_BOOK` | `true` | `true` agenda sozinho; `false` só avisa |
+| `CIDADE_PREFERIDA` | — | Prioriza uma cidade/unidade (ex.: `CURITIBA`) |
+| `DATA_MINIMA` / `DATA_MAXIMA` | — | Faixa de datas aceitas (`YYYY-MM-DD`) |
 
-```bash
-npm run loop
-```
+### Passo 3 — Ligue o agendamento
 
-Fica rodando e verifica a cada 6 horas (configurável com
-`LOOP_INTERVAL_MIN`, em minutos). Quando **agenda**, encerra sozinho. Bom para
-deixar aberto numa máquina ligada o dia todo.
+Na aba **Actions**, habilite os workflows (o GitHub pede confirmação na
+primeira vez). Pronto: ele passa a rodar **a cada 2 horas**. Você também pode
+disparar na hora pelo botão **Run workflow**.
+
+Para mudar a frequência, edite o `cron` em `.github/workflows/check.yml`
+(ex.: `'0 * * * *'` = de hora em hora).
+
+### Passo 4 — Quando agendar
+
+Você recebe a notificação de **agendamento realizado**. A partir daí, **desligue
+o workflow** (Actions → *Verificar vagas DETRAN-PR* → `•••` → *Disable
+workflow*) para não ficar rodando à toa.
+
+> ⚠️ **Dois detalhes do GitHub Actions:**
+> - Ele **desativa** workflows agendados se o repositório ficar **60 dias sem
+>   nenhuma atividade**. É raro isso acontecer antes de você agendar, mas se
+>   acontecer, é só reabilitar.
+> - Em repositório **privado**, os minutos do Actions são limitados (2000/mês no
+>   plano grátis). A cada 2 horas está tranquilo; de hora em hora, fique de olho.
+>   Em repositório **público**, é ilimitado.
 
 ---
 
-## Agendar para rodar "todo dia" sozinho
+## 💻 Rodar em um servidor/VPS próprio (alternativa)
 
-### Opção A — `cron` (Linux/macOS)
+Se preferir uma máquina Linux sua (VPS barata, Raspberry Pi):
 
-Rode `crontab -e` e adicione (ajuste o caminho):
-
-```cron
-# A cada 6 horas
-0 */6 * * * cd $HOME/detran && /usr/bin/npm run check >> $HOME/detran/runs/cron.log 2>&1
+```bash
+git clone <este-repo> detran && cd detran
+npm install
+npx playwright install --with-deps chromium
+cp .env.example .env      # preencha DETRAN_CPF e DETRAN_PROCESSO
+npm run check             # teste uma vez
 ```
 
-### Opção B — `systemd` (Linux)
-
-Há um service + timer prontos em `deploy/`:
+Depois, agende com **systemd** (arquivos prontos em `deploy/`):
 
 ```bash
 mkdir -p ~/.config/systemd/user
 cp deploy/detran-check.* ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now detran-check.timer
-systemctl --user list-timers | grep detran   # conferir
 ```
 
-### Opção C — GitHub Actions
+…ou com **cron** (`crontab -e`):
 
-O workflow `.github/workflows/check.yml` roda a cada 6h. Configure em
-*Settings → Secrets and variables → Actions*:
+```cron
+0 */2 * * * cd $HOME/detran && /usr/bin/npm run check >> $HOME/detran/runs/cron.log 2>&1
+```
 
-- **Secrets:** `DETRAN_CPF`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (e/ou `WEBHOOK_URL`).
-- **Variables:** `AUTO_BOOK` (`false` recomendado no Actions), `CIDADE_PREFERIDA`.
+…ou simplesmente deixe rodando em modo loop: `npm run loop` (verifica a cada 6h,
+ajustável com `LOOP_INTERVAL_MIN`, e para sozinho quando agenda).
 
-⚠️ O Actions **não passa pelo 2FA sozinho** — use-o para *monitorar/avisar*. O
-agendamento automático é mais confiável nas opções A ou B, na sua máquina.
+---
 
-### Opção D — Windows (Agendador de Tarefas)
+## Comandos
 
-Crie uma tarefa que executa, no diretório do projeto:
-`cmd /c npm run check`, repetindo a cada 6 horas.
+| Comando | O que faz |
+|---|---|
+| `npm run check` | Uma verificação. Agenda se houver vaga e `AUTO_BOOK=true`. |
+| `npm run loop` | Fica verificando em intervalos; encerra ao agendar. |
+| `npm run login` | (raramente necessário) abre o navegador visível para depurar. |
+
+Resultados possíveis do `check`:
+
+| Status | Significado | Código de saída |
+|---|---|---|
+| `BOOKED` | Agendou com sucesso 🎉 | 0 |
+| `AVAILABLE` | Achou vaga (mas `AUTO_BOOK=false`) | 0 |
+| `NO_AVAILABILITY` | Sem datas no momento (não notifica) | 1 |
+| `STUCK` | Travou / CPF ou processo errado (veja abaixo) | 2 |
+| `NEEDS_LOGIN` | Portal passou a exigir login gov.br (inesperado) | 2 |
+
+Screenshots e logs de cada execução ficam em `runs/` (e viram *artifacts* no
+GitHub Actions).
 
 ---
 
 ## Notificações
 
-Configure **pelo menos um** canal no `.env`:
+Configure **pelo menos um** canal:
 
-- **Telegram (recomendado):** fale com o [@BotFather](https://t.me/BotFather),
-  crie um bot, copie o token em `TELEGRAM_BOT_TOKEN`. Descubra seu `chat_id`
-  (ex.: mande uma mensagem pro bot e acesse
-  `https://api.telegram.org/bot<TOKEN>/getUpdates`) e ponha em `TELEGRAM_CHAT_ID`.
-- **Webhook (Slack/Discord/próprio):** ponha a URL em `WEBHOOK_URL`. Recebe um
-  `POST` JSON com os campos `text` e `content`.
-- **E-mail (SMTP):** preencha `SMTP_*`. Use **porta 465** (TLS) sempre que
-  possível — a automação recusa enviar a senha sem criptografia.
+- **Telegram (mais simples):** fale com o [@BotFather](https://t.me/BotFather),
+  crie um bot e copie o token (`TELEGRAM_BOT_TOKEN`). Mande uma mensagem ao seu
+  bot e acesse `https://api.telegram.org/bot<TOKEN>/getUpdates` para descobrir o
+  `chat_id` (`TELEGRAM_CHAT_ID`).
+- **Webhook (Slack/Discord/próprio):** ponha a URL em `WEBHOOK_URL`.
+- **E-mail (SMTP):** preencha `SMTP_*`. Use **porta 465** (TLS) — a automação
+  recusa enviar a senha sem criptografia.
 
-Você é notificado quando: **agendou**, **achou vaga**, **precisa relogar** ou
-**travou**. "Sem vagas" não gera notificação (pra não virar spam diário).
-
----
-
-## Configuração (`.env`)
-
-| Variável | Padrão | Descrição |
-|---|---|---|
-| `DETRAN_CPF` | — | CPF (obrigatório) |
-| `DETRAN_SERVICO` | `749` | Código do serviço (749 = avaliação psicológica) |
-| `AUTO_BOOK` | `true` | `true` agenda sozinho; `false` só avisa |
-| `DATA_MINIMA` / `DATA_MAXIMA` | — | Restringe datas aceitas (`YYYY-MM-DD`) |
-| `CIDADE_PREFERIDA` | — | Prioriza uma cidade/unidade (texto parcial) |
-| `HEADLESS` | `true` | `false` mostra o navegador (necessário no login) |
-| `USER_DATA_DIR` | `./user-data` | Pasta da sessão salva (não versione!) |
-| `STEP_TIMEOUT_MS` | `45000` | Tempo máx. por passo da página |
-| `LOOP_INTERVAL_MIN` | `360` | Intervalo do modo `loop` (minutos) |
-| `PLAYWRIGHT_CHROMIUM_PATH` | — | Caminho de um Chromium já instalado (opcional) |
+Você é avisado quando: **agendou**, **achou vaga** ou **travou**. "Sem vagas"
+não gera notificação (pra não virar spam).
 
 ---
 
 ## Como funciona por dentro
 
 O portal é uma aplicação Vue/PrimeVue que consome a API
-`https://ws.agendamento.detran.pr.gov.br/detran-agendamento/api`. O fluxo é um
+`https://ws.agendamento.detran.pr.gov.br/detran-agendamento/api`, num
 **formulário dirigido pelo servidor**, fase a fase
-(`/agendamento/fase/inicio` → `POST /agendamento/fase` → ... → calendário).
+(`/agendamento/fase/inicio` → `POST /agendamento/fase` → … → calendário).
 
-A automação:
+A automação (Playwright + Chromium):
 
-1. Abre o portal com a sessão salva (Playwright + Chromium).
-2. Escuta as respostas JSON de `/agendamento/fase` para saber a fase atual
-   (salvas em `runs/form-*.json` para depuração).
-3. Avança as fases automaticamente: preenche CPF, aceita termos, escolhe opções
-   de etapa única (priorizando `CIDADE_PREFERIDA`) e clica em *Continuar*.
-4. Ao chegar no **calendário**, detecta os dias clicáveis (não desabilitados).
-5. Se houver vaga e `AUTO_BOOK=true`, seleciona o primeiro dia, o primeiro
-   horário e confirma. Senão, só avisa.
+1. Abre o portal do serviço 749.
+2. Preenche **CPF** e **número do processo** para acessar.
+3. Avança as fases automaticamente: aceita termos, escolhe opções de etapa única
+   (priorizando `CIDADE_PREFERIDA`) e clica em *Continuar*.
+4. No **calendário**, lê os dias habilitados já com a data completa, aplica o
+   filtro `DATA_MINIMA`/`DATA_MAXIMA` e ordena da mais próxima para a mais longe.
+5. Se `AUTO_BOOK=true`, seleciona a data mais próxima, o primeiro horário e
+   confirma. Senão, só avisa.
 
 ### Se der `STUCK`
 
-Cada processo de habilitação tem etapas próprias (categoria, RENACH, escolha de
-clínica...). Se a automação travar numa etapa que não soube resolver:
+Duas causas comuns:
 
-1. Rode `HEADLESS=false npm run check` para ver o que aparece na tela.
-2. Olhe o screenshot em `runs/` e o último `runs/form-*.json`.
-3. Ajuste a função `resolveAndAdvance` em `src/detran.ts` para tratar a etapa
-   (os seletores são de PrimeVue: `.p-dropdown`, `.p-radiobutton`, `.p-button`).
-
-O código é comentado justamente nesses pontos de extensão.
+1. **CPF ou processo errados** — a automação avisa isso explicitamente. Confira
+   os secrets/`.env`.
+2. **Uma etapa específica do seu processo** (categoria, escolha de clínica…) que
+   os seletores genéricos não souberam resolver. Nesse caso:
+   - Rode localmente com `HEADLESS=false npm run check` para ver a tela.
+   - Olhe o screenshot em `runs/` e o último `runs/form-*.json`.
+   - Ajuste a função `resolveAndAdvance` em `src/detran.ts` (seletores PrimeVue:
+     `.p-dropdown`, `.p-radiobutton`, `.p-button`). O código é comentado nesses
+     pontos de extensão.
 
 ---
 
 ## Aviso legal
 
 Ferramenta de uso pessoal para agilizar **o seu próprio** agendamento. Use com
-responsabilidade e respeite os termos do DETRAN-PR. Não faça polling agressivo:
-o padrão (a cada 6 horas) é suficiente e educado com o servidor público.
+responsabilidade e respeite os termos do DETRAN-PR. O intervalo padrão (2–6h) é
+suficiente e educado com o servidor público — evite polling agressivo.

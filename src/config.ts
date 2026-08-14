@@ -18,6 +18,7 @@ export function onlyDigits(v: string): string {
 
 export interface Config {
   cpf: string;
+  processo: string;
   servico: string;
   autoBook: boolean;
   dataMinima?: string;
@@ -44,6 +45,8 @@ export interface Config {
 
 export function loadConfig(): Config {
   const cpf = onlyDigits(process.env.DETRAN_CPF ?? '');
+  // O número do processo/RENACH pode ter letras e dígitos — só removemos espaços.
+  const processo = (process.env.DETRAN_PROCESSO ?? '').replace(/\s+/g, '').trim();
   const servico = (process.env.DETRAN_SERVICO ?? '749').trim();
 
   const telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -56,6 +59,7 @@ export function loadConfig(): Config {
 
   const cfg: Config = {
     cpf,
+    processo,
     servico,
     autoBook: bool(process.env.AUTO_BOOK, true),
     dataMinima: process.env.DATA_MINIMA?.trim() || undefined,
@@ -94,6 +98,12 @@ export function assertRunnable(cfg: Config): void {
     throw new Error(
       `DETRAN_CPF inválido ("${process.env.DETRAN_CPF ?? ''}"). ` +
         'Preencha um CPF com 11 dígitos no arquivo .env.',
+    );
+  }
+  if (!cfg.processo) {
+    throw new Error(
+      'DETRAN_PROCESSO vazio. Preencha o número do processo/RENACH no .env ' +
+        '(o mesmo que você digita no portal para acessar).',
     );
   }
 }

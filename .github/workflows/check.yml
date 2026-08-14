@@ -1,13 +1,15 @@
 name: Verificar vagas DETRAN-PR
 
-# Roda periodicamente e também sob demanda (aba Actions -> Run workflow).
+# Roda periodicamente (24/7 na infraestrutura do GitHub) e sob demanda.
 on:
   schedule:
-    # A cada 6 horas (UTC). O GitHub pode atrasar alguns minutos.
-    - cron: '0 */6 * * *'
-  workflow_dispatch: {}
+    # A cada 2 horas (horário UTC). O GitHub pode atrasar alguns minutos em
+    # horários de pico. Para checar de hora em hora, use: '0 * * * *'
+    # (gasta mais minutos em repositório privado — veja o README).
+    - cron: '0 */2 * * *'
+  workflow_dispatch: {} # botão "Run workflow" na aba Actions
 
-# Evita execuções simultâneas.
+# Nunca deixa duas execuções rodarem ao mesmo tempo.
 concurrency:
   group: detran-check
   cancel-in-progress: false
@@ -30,34 +32,30 @@ jobs:
       - name: Instalar Chromium do Playwright
         run: npx playwright install --with-deps chromium
 
-      # A sessão logada (pasta user-data) é restaurada a partir de um cache/artefato.
-      # IMPORTANTE: leia o README — o GitHub Actions NÃO consegue passar pelo
-      # login com 2FA sozinho. Este job serve para MONITORAR e AVISAR; o
-      # agendamento automático é mais confiável rodando na sua própria máquina.
-      - name: Restaurar sessão do navegador (se existir)
-        uses: actions/cache@v4
-        with:
-          path: user-data
-          key: detran-session-v1
-
-      - name: Verificar vagas
+      - name: Verificar vagas (e agendar se AUTO_BOOK=true)
         env:
           DETRAN_CPF: ${{ secrets.DETRAN_CPF }}
+          DETRAN_PROCESSO: ${{ secrets.DETRAN_PROCESSO }}
           DETRAN_SERVICO: '749'
-          AUTO_BOOK: ${{ vars.AUTO_BOOK || 'false' }}
+          # O acesso é só com CPF + processo, então o Actions consegue agendar
+          # sozinho. Deixe 'true' para agendar automaticamente.
+          AUTO_BOOK: ${{ vars.AUTO_BOOK || 'true' }}
           HEADLESS: 'true'
           CIDADE_PREFERIDA: ${{ vars.CIDADE_PREFERIDA }}
+          DATA_MINIMA: ${{ vars.DATA_MINIMA }}
+          DATA_MAXIMA: ${{ vars.DATA_MAXIMA }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        # exit 1 (sem vaga) não deve marcar o workflow como falho.
-        run: npm run check || [ $? -eq 1 ]
+        # Código de saída 1 = "sem vaga hoje": não deve marcar o job como falho.
+        # Códigos 0 (agendou/achou) e 2 (erro) seguem o comportamento normal.
+        run: npm run check || [ "$?" -eq 1 ]
 
       - name: Guardar evidências (screenshots/logs)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: runs
+          name: runs-${{ github.run_id }}
           path: runs/
           retention-days: 7
           if-no-files-found: ignore

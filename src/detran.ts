@@ -108,7 +108,11 @@ async function pageText(page: Page): Promise<string> {
   }
 }
 
-/** A sessão precisa de login? (portal redireciona para a Central de Segurança) */
+/**
+ * O portal exigiu login gov.br/Central? Este serviço normalmente NÃO exige
+ * (acesso só com CPF + processo), então isto é uma rede de segurança para o
+ * caso de o DETRAN mudar o fluxo.
+ */
 async function needsLogin(page: Page): Promise<boolean> {
   const url = page.url();
   if (/identidadedigital\.pr\.gov\.br|centralautenticacao|centralcidadao/.test(url)) {
@@ -116,10 +120,20 @@ async function needsLogin(page: Page): Promise<boolean> {
   }
   const t = await pageText(page);
   return (
-    t.includes('entrar com') && (t.includes('central') || t.includes('gov.br'))
-  ) ||
-    t.includes('faca login') ||
-    t.includes('acesso nao permitido');
+    (t.includes('entrar com') && (t.includes('central') || t.includes('gov.br'))) ||
+    t.includes('faca login')
+  );
+}
+
+/** Portal recusou o acesso — quase sempre CPF ou nº do processo incorreto. */
+async function accessDenied(page: Page): Promise<boolean> {
+  const t = await pageText(page);
+  return (
+    t.includes('acesso nao permitido') ||
+    t.includes('dados nao conferem') ||
+    t.includes('nao foi possivel localizar') ||
+    t.includes('processo nao encontrado')
+  );
 }
 
 const NO_SLOT_PHRASES = [
@@ -180,14 +194,16 @@ export async function runCheck(
     return {
       status: 'NEEDS_LOGIN',
       message:
-        'Sessão não autenticada. Rode `npm run login` uma vez (com HEADLESS=false) ' +
-        'para entrar na Central de Segurança do Paraná e salvar a sessão.',
+        'O portal pediu login gov.br/Central de Segurança — inesperado para este ' +
+        'serviço (que costuma exigir só CPF + processo). O fluxo do DETRAN pode ter ' +
+        'mudado. Veja o screenshot.',
       screenshot: s,
     };
   }
 
-  // Preenche o CPF se o portal pedir logo de início.
+  // Preenche CPF e número do processo já na tela inicial de acesso.
   await maybeFillCpf(page, cfg);
+  await maybeFillProcesso(page, cfg);
 
   // Caminha pelas fases até o calendário (ou até travar).
   const MAX_STEPS = 18;
@@ -198,8 +214,19 @@ export async function runCheck(
     if (await needsLogin(page)) {
       return {
         status: 'NEEDS_LOGIN',
-        message: 'A sessão expirou durante o fluxo. Rode `npm run login` novamente.',
-        screenshot: await shot(page, cfg, 'session-expired'),
+        message: 'O portal passou a exigir login gov.br durante o fluxo (inesperado).',
+        screenshot: await shot(page, cfg, 'login-inesperado'),
+      };
+    }
+
+    // Acesso negado = CPF ou número do processo incorreto.
+    if (await accessDenied(page)) {
+      return {
+        status: 'STUCK',
+        message:
+          'O portal recusou o acesso. Verifique se DETRAN_CPF e DETRAN_PROCESSO ' +
+          'estão corretos (os mesmos que você digita no site para entrar).',
+        screenshot: await shot(page, cfg, 'acesso-negado'),
       };
     }
 
@@ -264,9 +291,56 @@ async function maybeFillCpf(page: Page, cfg: Config): Promise<boolean> {
   return false;
 }
 
+/** Preenche o número do processo/RENACH, se o campo existir e estiver vazio. */
+async function maybeFillProcesso(page: Page, cfg: Config): Promise<boolean> {
+  const candidates = [
+    'input[name*="processo" i]',
+    'input[id*="processo" i]',
+    'input[name*="renach" i]',
+    'input[id*="renach" i]',
+    'input[placeholder*="processo" i]',
+    'input[placeholder*="renach" i]',
+    'input[aria-label*="processo" i]',
+    'input[aria-label*="renach" i]',
+  ];
+  for (const sel of candidates) {
+    const loc = page.locator(sel).first();
+    if ((await loc.count()) > 0 && (await loc.isVisible().catch(() => false))) {
+      const cur = (await loc.inputValue().catch(() => '')) || '';
+      if (cur.trim() === '') {
+        await loc.click({ delay: 30 }).catch(() => {});
+        await loc.fill('').catch(() => {});
+        await loc.type(cfg.processo, { delay: 40 });
+        log.info('Número do processo preenchido.');
+      }
+      return true;
+    }
+  }
+
+  // Fallback: se houver um segundo campo de texto vazio (que não seja o CPF),
+  // provavelmente é o processo. Só preenche se o CPF já estiver preenchido.
+  const inputs = page.locator(
+    'input[type="text"]:visible, input[type="number"]:visible, input:not([type]):visible',
+  );
+  const n = await inputs.count().catch(() => 0);
+  for (let i = 0; i < n; i++) {
+    const el = inputs.nth(i);
+    const name = norm((await el.getAttribute('name').catch(() => '')) || '');
+    if (name.includes('cpf')) continue;
+    const val = (await el.inputValue().catch(() => '')) || '';
+    if (val.trim() === '') {
+      await el.click({ delay: 30 }).catch(() => {});
+      await el.type(cfg.processo, { delay: 40 });
+      log.info('Número do processo preenchido (campo genérico).');
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * Resolve a fase atual (marcar termo, escolher única opção, preencher CPF) e
- * clica no botão de avançar. Retorna true se fez alguma ação que muda de fase.
+ * Resolve a fase atual (CPF, processo, termos, opção única) e clica em avançar.
+ * Retorna true se fez alguma ação que muda de fase.
  */
 async function resolveAndAdvance(
   page: Page,
@@ -275,8 +349,9 @@ async function resolveAndAdvance(
 ): Promise<boolean> {
   let acted = false;
 
-  // 1) CPF, caso reapareça.
+  // 1) CPF e número do processo, caso apareçam.
   if (await maybeFillCpf(page, cfg)) acted = true;
+  if (await maybeFillProcesso(page, cfg)) acted = true;
 
   // 2) Aceitar termos: marca checkboxes não marcados.
   const checkboxes = page.locator(
