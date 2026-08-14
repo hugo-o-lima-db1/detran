@@ -186,7 +186,25 @@ export async function runCheck(
   const forms = attachFormSniffer(page, cfg);
 
   log.info(`Abrindo portal do serviço ${cfg.servico}...`);
-  await page.goto(cfg.portalUrl, { waitUntil: 'domcontentloaded' });
+  // 'commit' resolve assim que a resposta de navegação chega (não espera todo
+  // o DOM), tornando a abertura resiliente a páginas pesadas/lentas.
+  try {
+    await page.goto(cfg.portalUrl, {
+      waitUntil: 'commit',
+      timeout: Math.max(cfg.stepTimeoutMs, 60000),
+    });
+  } catch (e) {
+    return {
+      status: 'ERROR',
+      message:
+        `Não consegui abrir o portal do Detran (${(e as Error).message}). ` +
+        'Isso costuma ser bloqueio de rede: o site do Detran-PR pode recusar ' +
+        'conexões de servidores fora do Brasil. Veja o diagnóstico de rede no log.',
+      screenshot: await shot(page, cfg, 'goto-timeout').catch(() => undefined),
+    };
+  }
+  // Aguarda o carregamento assentar, sem falhar se demorar.
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(2500);
 
   if (await needsLogin(page)) {

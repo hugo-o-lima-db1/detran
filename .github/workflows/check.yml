@@ -36,6 +36,23 @@ jobs:
       - name: Instalar Chromium do Playwright
         run: npx playwright install --with-deps chromium
 
+      - name: Diagnóstico de rede (o runner alcança o Detran-PR?)
+        # Não derruba o job; só reporta se o site responde deste servidor.
+        continue-on-error: true
+        run: |
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+          echo "== Portal =="
+          curl -sS -A "$UA" -m 40 -o /dev/null \
+            -w 'http=%{http_code} tempo=%{time_total}s tamanho=%{size_download}B\n' \
+            "https://www.agendamento.detran.pr.gov.br/detran-agendamento/portal?servico=749" \
+            || echo "FALHOU ao acessar o portal"
+          echo "== API =="
+          curl -sS -A "$UA" -m 40 -o /dev/null \
+            -w 'http=%{http_code} tempo=%{time_total}s\n' \
+            -H 'X-App-Route: 23479:0' \
+            "https://ws.agendamento.detran.pr.gov.br/detran-agendamento/api/agendamento/fase/inicio?f_servico_pre_selecionado=749" \
+            || echo "FALHOU ao acessar a API"
+
       - name: Verificar vagas (e agendar se AUTO_BOOK=true)
         env:
           DETRAN_CPF: ${{ secrets.DETRAN_CPF }}
