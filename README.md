@@ -14,67 +14,83 @@ Portal oficial:
 
 ---
 
-## 🚀 Rodar 24/7 no GitHub Actions (recomendado)
+## ⚠️ Onde rodar: precisa ser um servidor NO BRASIL
 
-Esta é a forma mais simples: roda de graça na infraestrutura do GitHub, no
-horário agendado, **sem servidor para manter**.
+Isto foi **testado e comprovado** (veja as execuções do workflow): o portal do
+Detran-PR carrega seu aplicativo JavaScript do host
+`dagf-detran-atendimento-prod.paas.pr.gov.br`, e esse host **não responde de
+fora do Brasil**. Medido a partir dos servidores do GitHub (EUA):
 
-### Passo 1 — Tenha o código no seu GitHub
-
-O código já está no repositório. Se ainda não estiver na branch principal, faça
-o merge (ou use a branch atual). O workflow fica em
-`.github/workflows/check.yml`.
-
-### Passo 2 — Configure os segredos e variáveis
-
-No GitHub, vá em **Settings → Secrets and variables → Actions**.
-
-Em **Secrets** (dados sensíveis), clique em *New repository secret* e crie:
-
-| Secret | Valor |
+| Endereço | Resultado |
 |---|---|
-| `DETRAN_CPF` | Seu CPF (só números) |
-| `DETRAN_PROCESSO` | Seu número de processo / RENACH |
-| `TELEGRAM_BOT_TOKEN` | (opcional) token do bot do Telegram |
-| `TELEGRAM_CHAT_ID` | (opcional) seu chat id no Telegram |
-| `WEBHOOK_URL` | (opcional) URL de webhook Slack/Discord |
+| Portal (HTML) | `http=200` em 0,7s ✅ |
+| API de agendamento | `http=200` em 0,5s ✅ |
+| **Bundle JavaScript** | **timeout de 40s, 0 bytes** ❌ |
 
-Em **Variables** (não sensíveis), opcionalmente:
+Sem o bundle, a página abre **em branco** e não existe campo de CPF para
+preencher. Por isso:
 
-| Variable | Padrão | Para quê |
-|---|---|---|
-| `AUTO_BOOK` | `true` | `true` agenda sozinho; `false` só avisa |
-| `CIDADE_PREFERIDA` | — | Prioriza uma cidade/unidade (ex.: `CURITIBA`) |
-| `DATA_MINIMA` / `DATA_MAXIMA` | — | Faixa de datas aceitas (`YYYY-MM-DD`) |
-
-### Passo 3 — Ligue o agendamento
-
-Na aba **Actions**, habilite os workflows (o GitHub pede confirmação na
-primeira vez). Pronto: ele passa a rodar **a cada 2 horas**. Você também pode
-disparar na hora pelo botão **Run workflow**.
-
-Para mudar a frequência, edite o `cron` em `.github/workflows/check.yml`
-(ex.: `'0 * * * *'` = de hora em hora).
-
-### Passo 4 — Quando agendar
-
-Você recebe a notificação de **agendamento realizado**. A partir daí, **desligue
-o workflow** (Actions → *Verificar vagas DETRAN-PR* → `•••` → *Disable
-workflow*) para não ficar rodando à toa.
-
-> ⚠️ **Dois detalhes do GitHub Actions:**
-> - Ele **desativa** workflows agendados se o repositório ficar **60 dias sem
->   nenhuma atividade**. É raro isso acontecer antes de você agendar, mas se
->   acontecer, é só reabilitar.
-> - Em repositório **privado**, os minutos do Actions são limitados (2000/mês no
->   plano grátis). A cada 2 horas está tranquilo; de hora em hora, fique de olho.
->   Em repositório **público**, é ilimitado.
+- ❌ **GitHub Actions não funciona** (o agendamento vem desligado no workflow).
+- ✅ **VPS/servidor no Brasil funciona** — use o instalador abaixo.
 
 ---
 
-## 💻 Rodar em um servidor/VPS próprio (alternativa)
+## 🚀 Rodar 24/7 numa VPS no Brasil (recomendado)
 
-Se preferir uma máquina Linux sua (VPS barata, Raspberry Pi):
+Um único comando faz tudo: instala o que falta, pergunta seus dados, testa na
+hora e agenda a verificação a cada 2 horas.
+
+```bash
+git clone -b claude/automate-psychology-exam-booking-wwkv2k \
+  https://github.com/hugo-o-lima-db1/detran.git ~/detran-agendamento
+cd ~/detran-agendamento
+bash deploy/instalar-vps.sh
+```
+
+O script (`deploy/instalar-vps.sh`):
+
+1. Instala **Node.js 22**, **git** e o **Chromium** (com as bibliotecas do sistema).
+2. Pergunta seu **CPF**, **número do processo** e, opcionalmente, o **Telegram**.
+3. Grava o `.env` com permissão `600` (só você lê).
+4. **Roda um teste imediato** e explica o resultado em português.
+5. Agenda no **systemd** a cada 2 horas, com `linger` habilitado (continua
+   rodando depois que você fecha o SSH). Se não houver systemd, usa `cron`.
+
+Quando você receber o aviso de agendamento realizado, **desligue**:
+
+```bash
+systemctl --user disable --now detran-check.timer
+```
+
+Comandos úteis:
+
+```bash
+systemctl --user list-timers | grep detran   # quando roda a próxima vez
+journalctl --user -u detran-check -n 50      # ver o log das execuções
+```
+
+---
+
+## GitHub Actions (apenas execução manual)
+
+O workflow `.github/workflows/check.yml` continua no repositório, mas com o
+**agendamento desligado** — porque, como medido acima, o servidor do GitHub não
+alcança o bundle JavaScript do Detran e a página abre em branco.
+
+Ele serve para duas coisas:
+
+1. **Re-testar** se o Detran mudar a hospedagem (aba *Actions* → *Verificar
+   vagas DETRAN-PR* → **Run workflow**). O passo *Diagnóstico de rede* mostra na
+   hora se o bundle voltou a responder.
+2. Se um dia responder, basta descomentar o bloco `schedule` no início do
+   arquivo para voltar a rodar de forma agendada.
+
+Os secrets já estão configurados no **Environment `detran`** (o job usa
+`environment: detran` para lê-los): `DETRAN_CPF` e `DETRAN_PROCESSO`.
+
+## 💻 Instalação manual (se preferir não usar o script)
+
+Os mesmos passos que o `instalar-vps.sh` faz, na mão:
 
 ```bash
 git clone <este-repo> detran && cd detran
@@ -121,6 +137,7 @@ Resultados possíveis do `check`:
 | `NO_AVAILABILITY` | Sem datas no momento (não notifica) | 1 |
 | `STUCK` | Travou / CPF ou processo errado (veja abaixo) | 2 |
 | `NEEDS_LOGIN` | Portal passou a exigir login gov.br (inesperado) | 2 |
+| `ERROR` | Página em branco (servidor fora do Brasil) ou falha de rede | 2 |
 
 Screenshots e logs de cada execução ficam em `runs/` (e viram *artifacts* no
 GitHub Actions).

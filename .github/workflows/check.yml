@@ -1,12 +1,24 @@
 name: Verificar vagas DETRAN-PR
 
-# Roda periodicamente (24/7 na infraestrutura do GitHub) e sob demanda.
+# ⚠️ ATENÇÃO: o agendamento automático está DESLIGADO de propósito.
+#
+# Motivo (comprovado por diagnóstico nas execuções deste workflow): o portal do
+# Detran-PR carrega seu aplicativo JavaScript do host
+#   dagf-detran-atendimento-prod.paas.pr.gov.br
+# e esse host NÃO responde a partir dos servidores do GitHub (EUA):
+#   Portal .......: http=200 em 0,7s
+#   API ..........: http=200 em 0,5s
+#   Bundle JS ....: timeout total (40s), 0 bytes
+# Sem o bundle, a página abre em branco e não existe campo de CPF para preencher.
+#
+# ➜ Para rodar 24/7, use uma VPS NO BRASIL: veja deploy/instalar-vps.sh
+#
+# Este workflow segue disponível para execução MANUAL (útil para re-testar se o
+# Detran mudar a hospedagem). Se um dia o bundle passar a responder daqui, basta
+# descomentar o bloco "schedule" abaixo.
 on:
-  schedule:
-    # A cada 2 horas (horário UTC). O GitHub pode atrasar alguns minutos em
-    # horários de pico. Para checar de hora em hora, use: '0 * * * *'
-    # (gasta mais minutos em repositório privado — veja o README).
-    - cron: '0 */2 * * *'
+  # schedule:
+  #   - cron: '0 */2 * * *'
   workflow_dispatch: {} # botão "Run workflow" na aba Actions
 
 # Nunca deixa duas execuções rodarem ao mesmo tempo.
