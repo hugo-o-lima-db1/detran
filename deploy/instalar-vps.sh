@@ -42,6 +42,51 @@ else
   fi
 fi
 
+# --- 0.2 curl (usado já no teste de rede abaixo) ----------------------------
+if ! command -v curl >/dev/null 2>&1; then
+  azul "Instalando curl..."
+  $SUDO apt-get update -qq
+  $SUDO apt-get install -y curl
+fi
+
+# --- 0.5 Esta máquina alcança o Detran? -------------------------------------
+# O portal carrega seu JavaScript de um host que NÃO responde fora do Brasil.
+# Testar isso agora evita instalar tudo para descobrir depois que não funciona.
+azul "[0/6] Verificando se esta máquina alcança o portal do Detran..."
+UA_TEST='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+PORTAL_URL="https://www.agendamento.detran.pr.gov.br/detran-agendamento/portal?servico=749"
+
+# Descobre o nome atual do bundle (o hash muda a cada deploy do Detran).
+BUNDLE_PATH="$(curl -sS -A "$UA_TEST" -m 30 "$PORTAL_URL" 2>/dev/null \
+  | grep -o 'https://dagf-detran-atendimento-prod\.paas\.pr\.gov\.br/assets/index-[^"]*\.js' \
+  | head -1 || true)"
+if [ -z "${BUNDLE_PATH:-}" ]; then
+  BUNDLE_PATH="https://dagf-detran-atendimento-prod.paas.pr.gov.br/assets/index-cc095a18.js"
+fi
+
+BUNDLE_CODE="$(curl -sS -A "$UA_TEST" -H 'Referer: https://www.detran.pr.gov.br/' \
+  -m 30 -o /dev/null -w '%{http_code}' "$BUNDLE_PATH" 2>/dev/null || echo "000")"
+
+case "$BUNDLE_CODE" in
+  000)
+    echo
+    vermo "     ✘ Esta máquina NÃO alcança o servidor de aplicação do Detran."
+    vermo "       (host dagf-detran-atendimento-prod.paas.pr.gov.br — timeout)"
+    echo
+    amar  "     Esse host só responde de dentro do Brasil. Se esta VPS está no"
+    amar  "     exterior, a automação vai abrir a página em branco e não funcionar."
+    echo
+    read -r -p "     Continuar mesmo assim? [s/N]: " GO
+    case "${GO:-N}" in
+      [sS]*) amar "     Ok, seguindo (pode não funcionar)." ;;
+      *)     vermo "     Abortado. Use uma VPS hospedada no Brasil."; exit 1 ;;
+    esac
+    ;;
+  *)
+    verde "     ✔ Alcança o Detran (bundle respondeu HTTP $BUNDLE_CODE). Rede OK."
+    ;;
+esac
+
 # --- 1. Node.js 20+ ---------------------------------------------------------
 need_node=1
 if command -v node >/dev/null 2>&1; then
