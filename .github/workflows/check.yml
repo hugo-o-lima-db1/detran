@@ -17,6 +17,10 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Os secrets DETRAN_CPF/DETRAN_PROCESSO estão salvos no Environment "detran"
+    # (Settings → Environments). Vincular o job a esse ambiente torna esses
+    # secrets disponíveis para os passos abaixo.
+    environment: detran
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
