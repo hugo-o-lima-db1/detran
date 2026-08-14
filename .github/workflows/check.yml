@@ -52,6 +52,13 @@ jobs:
             -H 'X-App-Route: 23479:0' \
             "https://ws.agendamento.detran.pr.gov.br/detran-agendamento/api/agendamento/fase/inicio?f_servico_pre_selecionado=749" \
             || echo "FALHOU ao acessar a API"
+          echo "== Bundle JS do portal (host da aplicacao) =="
+          # Se ESTE host falhar, a pagina abre em branco e nada funciona.
+          curl -sS -A "$UA" -m 40 -o /dev/null \
+            -w 'http=%{http_code} tempo=%{time_total}s tamanho=%{size_download}B\n' \
+            -H 'Referer: https://www.detran.pr.gov.br/' \
+            "https://dagf-detran-atendimento-prod.paas.pr.gov.br/assets/index-cc095a18.js" \
+            || echo "FALHOU ao acessar o bundle JS (provavel bloqueio geografico)"
 
       - name: Verificar vagas (e agendar se AUTO_BOOK=true)
         env:

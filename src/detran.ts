@@ -185,6 +185,18 @@ export async function runCheck(
   const page = context.pages()[0] ?? (await context.newPage());
   const forms = attachFormSniffer(page, cfg);
 
+  // Diagnóstico: registra requisições que falharam (bloqueio de host, DNS,
+  // TLS) e erros de console. Sem isso, uma página em branco é um mistério.
+  const failedRequests: string[] = [];
+  page.on('requestfailed', (req) => {
+    const line = `${req.failure()?.errorText ?? 'falhou'} ${req.url().slice(0, 140)}`;
+    failedRequests.push(line);
+    log.warn(`Requisição falhou: ${line}`);
+  });
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') log.warn(`Console error: ${msg.text().slice(0, 200)}`);
+  });
+
   log.info(`Abrindo portal do serviço ${cfg.servico}...`);
   // 'commit' resolve assim que a resposta de navegação chega (não espera todo
   // o DOM), tornando a abertura resiliente a páginas pesadas/lentas.
@@ -272,6 +284,31 @@ export async function runCheck(
       log.warn(`Fase ${step}: nada para resolver (idle ${idleSteps}).`);
       if (idleSteps >= 2) break;
     }
+  }
+
+  // Diagnóstico do estado final: página vazia indica que o app não carregou
+  // (bloqueio de host/geo), o que é diferente de "etapa desconhecida".
+  const bodyLen = (await pageText(page)).length;
+  const inputCount = await page.locator('input').count().catch(() => 0);
+  log.info(
+    `Diagnóstico: url=${page.url()} | texto=${bodyLen} chars | inputs=${inputCount} | ` +
+      `respostas de fase capturadas=${forms.count} | requisições falhas=${failedRequests.length}`,
+  );
+  if (failedRequests.length) {
+    log.warn(`Falhas de rede: ${failedRequests.slice(0, 8).join(' ;; ')}`);
+  }
+
+  if (bodyLen < 40 && inputCount === 0) {
+    return {
+      status: 'ERROR',
+      message:
+        'A página do portal abriu em BRANCO (nada renderizou). O HTML carrega, mas o ' +
+        'aplicativo JavaScript do Detran não executou — típico de bloqueio de acesso ' +
+        'a partir de servidores fora do Brasil. Rode a automação de um servidor/VPS ' +
+        'no Brasil (veja deploy/instalar-vps.sh). ' +
+        (failedRequests.length ? `Falhas: ${failedRequests.slice(0, 3).join(' | ')}` : ''),
+      screenshot: await shot(page, cfg, 'pagina-branca'),
+    };
   }
 
   return {
